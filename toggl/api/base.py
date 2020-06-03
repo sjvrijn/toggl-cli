@@ -14,7 +14,7 @@ logger = logging.getLogger('toggl.api.base')
 Entity = typing.TypeVar('Entity', bound='TogglEntity')
 
 
-def evaluate_conditions(conditions, entity, contain=False):  # type: (typing.Dict, Entity, bool) -> bool
+def evaluate_conditions(conditions, entity, contain=False):    # type: (typing.Dict, Entity, bool) -> bool
     """
     Will compare conditions dict and entity.
     Condition's keys and values must match the entities attributes, but not the other way around.
@@ -60,7 +60,10 @@ def evaluate_conditions(conditions, entity, contain=False):  # type: (typing.Dic
             if value is None or entity_value is None:
                 return False
 
-            if not isinstance(value, set) and not isinstance(value, model_fields.SetContainer):
+            if not (
+                isinstance(value, set)
+                or isinstance(value, model_fields.SetContainer)
+            ):
                 return False
 
             if isinstance(value, set) and not entity_value._inner_set.issuperset(value):

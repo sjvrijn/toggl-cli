@@ -91,7 +91,7 @@ class TogglField(typing.Generic[T]):
         self.read = read
         self.premium = premium
 
-        if not write and not read:
+        if not (write or read):
             logger.warning('The field \'{}\' does not support write nor read mode, it is maybe useless?'.format(self))
 
     def validate(self, value, instance):  # type: (T, base.Entity) -> None
@@ -197,7 +197,7 @@ class TogglField(typing.Generic[T]):
     def _has_value(self, instance):
         return self.name in instance.__dict__
 
-    def __get__(self, instance, owner):  # type: (typing.Optional['base.Entity'], typing.Any) -> T
+    def __get__(self, instance, owner):    # type: (typing.Optional['base.Entity'], typing.Any) -> T
         """
         Main TogglField's method that defines how the value of the field is retrieved from TogglEntity's instance.
 
@@ -208,7 +208,7 @@ class TogglField(typing.Generic[T]):
         if not self.name:
             raise RuntimeError('Name of the field is not defined!')
 
-        if not self.read and not self._has_value(instance):
+        if not (self.read or self._has_value(instance)):
             raise exceptions.TogglNotAllowedException('You are not allowed to read from \'{}\' attribute!'
                                                       .format(self.name))
 
@@ -219,7 +219,7 @@ class TogglField(typing.Generic[T]):
 
         return self._get_value(instance)
 
-    def __set__(self, instance, value):  # type: (base.Entity, T) -> None
+    def __set__(self, instance, value):    # type: (base.Entity, T) -> None
         """
         Main TogglField's method that defines how the value of the field is stored in the TogglEntity's instance.
 
@@ -239,19 +239,19 @@ class TogglField(typing.Generic[T]):
             from .models import WorkspacedEntity, Workspace
             workspace = instance.workspace if isinstance(instance, WorkspacedEntity) else instance
 
-            if self.admin_only and not workspace.admin:
-                raise exceptions.TogglNotAllowedException(
-                    'You are trying edit field \'{}.{}\' which is admin only field, '
-                    'but you are not an admin in workspace \'{}\'!'
-                        .format(instance.__class__.__name__, self.name, workspace.name)
-                )
+        if self.admin_only and not workspace.admin:
+            raise exceptions.TogglNotAllowedException(
+                'You are trying edit field \'{}.{}\' which is admin only field, '
+                'but you are not an admin in workspace \'{}\'!'
+                    .format(instance.__class__.__name__, self.name, workspace.name)
+            )
 
-            if self.premium and not workspace.premium:
-                raise exceptions.TogglPremiumException(
-                    'You are trying to edit field \'{}.{}\' which is premium only field, '
-                    'but the associated workspace \'{}\' is not premium!'
-                        .format(instance.__class__.__name__, self.name, workspace.name)
-                )
+        if self.premium and not workspace.premium:
+            raise exceptions.TogglPremiumException(
+                'You are trying to edit field \'{}.{}\' which is premium only field, '
+                'but the associated workspace \'{}\' is not premium!'
+                    .format(instance.__class__.__name__, self.name, workspace.name)
+            )
 
         if value is None:
             if not self.required:
@@ -323,9 +323,7 @@ class DateTimeField(TogglField[typing.Union[datetime.datetime, pendulum.DateTime
                 value = pendulum.instance(value, config.timezone)
             else:
                 value = pendulum.instance(value)
-        elif isinstance(value, pendulum.DateTime):
-            pass
-        else:
+        elif not isinstance(value, pendulum.DateTime):
             raise TypeError('Value which is being set to DateTimeField have to be either '
                             'datetime.datetime or pendulum.DateTime object!')
 
@@ -517,11 +515,7 @@ class ChoiceField(StringField):
 
 class ListContainer(MutableSequence):
     def __init__(self, entity_instance, field_name, existing_list=None):
-        if existing_list is not None:
-            self._inner_list = copy(existing_list)
-        else:
-            self._inner_list = list()
-
+        self._inner_list = copy(existing_list) if existing_list is not None else list()
         self._instance = entity_instance
         self._field_name = field_name
 
@@ -581,7 +575,7 @@ class ListField(TogglField[ListType]):
             super().__set__(instance, None)
             return
 
-        if not isinstance(value, list) and not isinstance(value, ListContainer):
+        if not (isinstance(value, list) or isinstance(value, ListContainer)):
             raise TypeError('ListField expects list instance when setting a value to the field.')
 
         if isinstance(value, list):
@@ -648,7 +642,11 @@ class SetField(TogglField[SetType]):
         if value is None:
             return SetContainer(instance, self.name)
 
-        if not isinstance(value, list) and not isinstance(value, SetContainer) and not isinstance(value, set):
+        if not (
+            isinstance(value, list)
+            or isinstance(value, SetContainer)
+            or isinstance(value, set)
+        ):
             raise TypeError('ListField expects list/set/SetContainer instance when setting a value to the field.')
 
         return SetContainer(instance, self.name, value)
@@ -667,7 +665,11 @@ class SetField(TogglField[SetType]):
             super().__set__(instance, None)
             return
 
-        if not isinstance(value, list) and not isinstance(value, SetContainer) and not isinstance(value, set):
+        if not (
+            isinstance(value, list)
+            or isinstance(value, SetContainer)
+            or isinstance(value, set)
+        ):
             raise TypeError('ListField expects list/set/SetContainer instance when setting a value to the field.')
 
         if not isinstance(value, SetContainer):
@@ -728,33 +730,31 @@ class MappingField(TogglField[M]):
         self.cardinality = cardinality
 
     def init(self, instance, value):  # type: (base.Entity, MappedM) -> None
-        if self.cardinality == MappingCardinality.ONE:
-            if value is None:
-                instance.__dict__[self.mapped_field] = None
-                return
-
-            try:
-                if value.id is None:
-                    raise RuntimeError(
-                        'You are trying to assign mapped entity which was yet not saved! (Does not have ID)')
-
-                instance.__dict__[self.mapped_field] = value.id
-
-                if not isinstance(value, self.mapped_cls):
-                    logger.warning('Assigning instance of class {} to MappedField with class {}.'
-                        .format(
-                            type(value),
-                            self.mapped_cls
-                        ))
-            except AttributeError:  # It is probably not TogglEntity ==> lets try if it is ID/integer
-                try:
-                    instance.__dict__[self.mapped_field] = int(value)
-                except ValueError:  # Don't have any clue what it is, let just save the value and log warning
-                    logger.warning('Assigning as ID to mapped field value which is not integer!')
-                    instance.__dict__[self.mapped_field] = value
-
-        else:
+        if self.cardinality != MappingCardinality.ONE:
             raise NotImplementedError('Field with MANY cardinality is not supported for attribute assignment')
+        if value is None:
+            instance.__dict__[self.mapped_field] = None
+            return
+
+        try:
+            if value.id is None:
+                raise RuntimeError(
+                    'You are trying to assign mapped entity which was yet not saved! (Does not have ID)')
+
+            instance.__dict__[self.mapped_field] = value.id
+
+            if not isinstance(value, self.mapped_cls):
+                logger.warning('Assigning instance of class {} to MappedField with class {}.'
+                    .format(
+                        type(value),
+                        self.mapped_cls
+                    ))
+        except AttributeError:  # It is probably not TogglEntity ==> lets try if it is ID/integer
+            try:
+                instance.__dict__[self.mapped_field] = int(value)
+            except ValueError:  # Don't have any clue what it is, let just save the value and log warning
+                logger.warning('Assigning as ID to mapped field value which is not integer!')
+                instance.__dict__[self.mapped_field] = value
 
     def validate(self, value, instance):  # type: (M, base.Entity) -> None
         try:
@@ -829,20 +829,19 @@ class MappingField(TogglField[M]):
             raise exceptions.TogglException('{}: Unknown cardinality \'{}\''.format(self.name, self.cardinality))
 
     def __set__(self, instance, value):  # type: (base.Entity, MappedM) -> None
-        if self.cardinality == MappingCardinality.ONE:
-            try:
-                if value.id is None:
-                    raise RuntimeError(
-                        'You are trying to assign mapped entity which was yet not saved! (Does not have ID)')
-
-                if not isinstance(value, self.mapped_cls):
-                    logger.warning('Assigning class {} to MappedField with class {}.'.format(type(value),
-                                                                                             self.mapped_cls))
-                self._set_value(instance, value.id)
-            except AttributeError:
-                if not isinstance(value, int):
-                    logger.warning('Assigning as ID to mapped field value which is not integer!')
-
-                self._set_value(instance, value)
-        else:
+        if self.cardinality != MappingCardinality.ONE:
             raise NotImplementedError('Field with MANY cardinality is not supported for attribute assignment')
+        try:
+            if value.id is None:
+                raise RuntimeError(
+                    'You are trying to assign mapped entity which was yet not saved! (Does not have ID)')
+
+            if not isinstance(value, self.mapped_cls):
+                logger.warning('Assigning class {} to MappedField with class {}.'.format(type(value),
+                                                                                         self.mapped_cls))
+            self._set_value(instance, value.id)
+        except AttributeError:
+            if not isinstance(value, int):
+                logger.warning('Assigning as ID to mapped field value which is not integer!')
+
+            self._set_value(instance, value)

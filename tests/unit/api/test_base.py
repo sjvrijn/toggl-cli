@@ -608,7 +608,7 @@ class TestTogglEntity:
         obj.id = 123
         new_obj = copy(obj)
 
-        assert not obj is new_obj
+        assert obj is not new_obj
         assert obj.string == new_obj.string
         assert obj.integer == new_obj.integer
         assert new_obj.id is None

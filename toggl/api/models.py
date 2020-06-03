@@ -477,7 +477,7 @@ class TimeEntryDateTimeField(fields.DateTimeField):
 
     def format(self, value, config=None, instance=None, display_running=False,
                only_time_for_same_day=None):
-        if not display_running and not only_time_for_same_day:
+        if not (display_running or only_time_for_same_day):
             return super().format(value, config)
 
         if value is None and display_running:
@@ -556,7 +556,7 @@ class TimeEntrySet(base.TogglSet):
             start = conditions.pop('start', None)
             stop = conditions.pop('stop', None)
 
-            if start is not None or stop is not None:
+            if not (start is None and stop is None):
                 url += '?'
 
             if start is not None:
@@ -770,8 +770,8 @@ class TimeEntry(WorkspacedEntity):
         if self is None:
             # noinspection PyMethodFirstArgAssignment
             self = TimeEntry.objects.current()
-            if self is None:
-                raise exceptions.TogglValidationException('There is no running entry to be stoped!')
+        if self is None:
+            raise exceptions.TogglValidationException('There is no running entry to be stoped!')
 
         if not self.is_running:
             raise exceptions.TogglValidationException('You can\'t stop not running entry!')

@@ -55,7 +55,7 @@ class ConfigBootstrap:
 
         return self.workspaces
 
-    def _map_answers(self, **answers):  # type: (**str) -> dict
+    def _map_answers(self, **answers):    # type: (**str) -> dict
         """
         Creates dict which follows the ConfigParser convention from the provided user's answers.
         """
@@ -67,9 +67,7 @@ class ConfigBootstrap:
 
         if answers['timezone'] == self.SYSTEM_TIMEZONE:
             output['tz'] = 'local'
-        elif answers['timezone'] == self.TOGGL_TIMEZONE:
-            pass
-        else:
+        elif answers['timezone'] != self.TOGGL_TIMEZONE:
             output['tz'] = answers['timezone']
 
         if output['file_logging']:

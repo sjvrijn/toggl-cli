@@ -165,11 +165,7 @@ class ModifierSetType(SetType):
 
     @staticmethod
     def is_modifiers_value(parsed_values):
-        for value in parsed_values:
-            if value[0] != '+' and value[0] != '-':
-                return False
-
-        return True
+        return not any(value[0] != '+' and value[0] != '-' for value in parsed_values)
 
     def convert(self, value, param, ctx):
         parsed = super().convert(value, param, ctx)
@@ -181,7 +177,7 @@ class ModifierSetType(SetType):
         for modifier_value in parsed:
             modifier = modifier_value[0]
 
-            if modifier != '+' and modifier != '-':
+            if modifier not in ['+', '-']:
                 self.fail('Modifiers must start with either \'+\' or \'-\' character!')
 
             # Add value
@@ -220,7 +216,7 @@ class FieldsType(click.ParamType):
 
             modifier = modifier_value[0]
 
-            if modifier != '+' and modifier != '-':
+            if modifier not in ['+', '-']:
                 self.fail('Field modifiers must start with either \'+\' or \'-\' character!')
 
             field = modifier_value.replace(modifier, '')
